@@ -1,6 +1,6 @@
 # notamaton
 
-A tiny library to create finite state automata or finite state machines using a concise accumulator-driven syntax.
+A tiny library to create finite state automata or finite state machines using a concise data-driven syntax.
 
 The syntax is dead simple. I'll show you with an example
 
@@ -125,7 +125,7 @@ You can also add catchalls for a particular state which will take precedence ove
    :found-a {\a :found-a
              \b [:start (fn [accumulator]
                           (inc accumulator))]
-             :_ [:start (fn [accumulator] (+ 10 data))]}
+             :_ [:start (fn [accumulator] (+ 10 accumulator))]}
    :_ [:start (fn [accumulator]
                 (dec accumulator))]})
 
@@ -153,7 +153,7 @@ So we can't store it in the RAM.
 
 
 Here's how we can model the state of the students.
-```
+```clj
 (require '[notamaton.core :as n])
 
 (def states
@@ -188,13 +188,13 @@ Here's how we can model the state of the students.
 
 
 (next-grade (:grade tom) nil (:status tom)) 
-; {:state 10, :accumulator nil}
+; {:state 10, :acc nil}
 
 (next-grade (:grade jim) nil (:status jim))
-; {:state 9, :accumulator nil}
+; {:state 9, :acc nil}
 
 (next-grade (:grade jess) nil (:status jess)) 
-; {:state :college, :accumulator "Get outta here"}
+; {:state :college, :acc "Get outta here"}
 
 ```
 
