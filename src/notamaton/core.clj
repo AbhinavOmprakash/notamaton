@@ -1,7 +1,7 @@
 (ns notamaton.core)
 
 
-(defn arity
+(defn- arity
   ;; taken from https://stackoverflow.com/a/47861069/17938983
   "Returns the maximum arity of:
     - anonymous functions like `#()` and `(fn [])`.
@@ -28,7 +28,7 @@
           max-arity)))))
 
 
-(defn make-inner-map-uniform
+(defn- make-inner-map-uniform
   [inner-m]
   (reduce-kv
     (fn [r k* v*]
@@ -54,9 +54,10 @@
     inner-m))
 
 
-(defn make-uniform
+(defn- make-uniform
   "converts a map {:state {:action :new-state
                            :action2 [:new-state2 identity]}}
+
   to              {:state {:action [:new-state (fn [_ data _] data)
                            :action2 [:new-state2 (fn [_ data _] 
                                                    (identity data))]}}"
@@ -70,7 +71,7 @@
              fsm))
 
 
-(defn insert-catchall
+(defn- insert-catchall
   "If a catchall for all states is defined 
   insert a catchall `:_` inside the {:action [:new-state f]} map if it doesn't already contain a catchall"
   [fsm]
@@ -87,49 +88,66 @@
     fsm))
 
 
-(def compile-data
+(def ^:private compile-data
   (comp insert-catchall
         make-uniform))
 
 
-(defn create-stateless-fsm
-  "Takes in a map of `states` and returns a 3-arity function
-  that takes the current state, accumulator and an input.
-  and returns a map of the new state and `action` applied to the accumulator.
+(defn create-fsm
+  "Takes in a map of `states` and returns a multi-arity PURE function
+  that takes 2 or 3 args.
+
+  `(fn ([state input])
+      ([state accumulator input]))`
+
+  The 2-arity function returns the new state after the input. 
+  Useful for reducing over multiple inputs.
+
+  `(reduce (create-fsm states) :initial-state [:input1 :input2 :input3])
+   => :final-state`
+
+  The 3-arity function returns a map of the new state and `action` applied to the accumulator.
   
   the shape of the map is 
-  {:state state
-   :acc accumulator}
-
+  `{:state state
+   :acc accumulator}`
 
   `action` is a 1 or 3-arity function defined in states.
+
+  NOTE: the 2-arity and 3-arity functions return different shapes of data.
   "
   [states]
   (let [fsm* (compile-data states)]
-    (fn [state accumulator input]
-      (if-let [[state* f] (get-in fsm* [state input])]
-        {:state state*
-         :acc (f state accumulator input)}
-        (if-let [[state* f] (get-in fsm* [state :_])]
-          {:state state*
-           :acc (f state accumulator input)}
-          ;; catch all
-          ;; should I return the same state or nil?
-          {:state state
-           :acc accumulator})))))
+    (fn f
+      ([state input] (:state (f state nil input)))
+      ([state accumulator input]
+       (if-let [[state* f] (get-in fsm* [state input])]
+         {:state state*
+          :acc (f state accumulator input)}
+         (if-let [[state* f] (get-in fsm* [state :_])]
+           {:state state*
+            :acc (f state accumulator input)}
+           ;; catch all
+           ;; should I return the same state or nil?
+           {:state state
+            :acc accumulator}))))))
 
 
-(defn create-fsm
+(defn create-fsm!
   "Takes in a map of `states` and a starting state.
 
-  Returns a 2-arity function that takes an accumulator and an input.
+  Returns a STATEFUL! 2-arity function that takes an accumulator and an input.
   which returns the value of `action` applied to the accumulator.
 
   `action` is a 1 or 3-arity function defined in states.
+
+  Returns the value of the accumulator, not the final state at the end of all inputs.
+
+  use `create-fsm` if you wish to manage the state by yourself
   "
-  [states state]
-  (let [state* (atom state)
-        f (create-stateless-fsm states)]
+  [states initial-state]
+  (let [state* (atom initial-state)
+        f (create-fsm states)]
     (fn [accumulator input]
       (let [{:keys [state acc]} (f @state* accumulator input)]
         (swap! state* (fn [_] state))
@@ -152,15 +170,15 @@
    :found-a {\a :found-a
              \b [:start (fn [data]
                           (inc data))]
-             :_ [:start (fn [_ d _] (+ 10 d))]}
-   :_ [:start (fn [data]
-                (dec data))]})
+              }
+   :_ [:start]})
 
+(seq "a")
 
 (def f (create-fsm fsm :start))
 
 
-(reduce f 0 "abacx")
+(reduce f 0 "abababc")
 
 
 (def states
@@ -213,11 +231,12 @@
   {:grade 12
    :status :pass})
 
-(def next-grade (create-stateless-fsm states))
+(def next-grade (create-fsm states))
 
 
-(next-grade (:grade tom) nil (:status tom)) 
-; {:state 10, :data nil}
+(reduce next-grade (:grade tom) [:pass :pass :pass :pass]) ; :pass
+; :pass
+; :college
 
 (next-grade (:grade jim) nil (:status jim))
 ; {:state 9, :data nil}
@@ -225,4 +244,3 @@
 (next-grade (:grade jess) nil (:status jess))  ; {:state :college, :data "Get outta here"}
 
 )
-

@@ -25,10 +25,10 @@ we have 5 and 10 cent coins only.
                 "here is candy")]}})
 
 
-(reduce (n/create-fsm states 0) 0 [5 5 5 5]) 
+(reduce (n/create-fsm! states 0) 0 [5 5 5 5]) 
 ; "here is candy"
 
-(reduce (n/create-fsm states 0) 0 [10 5 5]) 
+(reduce (n/create-fsm! states 0) 0 [10 5 5]) 
 ; "here is candy"
 
 ```
@@ -64,7 +64,7 @@ example taken from [tilakone](https://github.com/metosin/tilakone)
                           (inc accumulator))]}})
 
 
-(def fsm (n/create-fsm states :start))
+(def fsm (n/create-fsm! states :start))
 
 
 (reduce fsm 0 "abaaabaaaab")
@@ -86,7 +86,7 @@ let's add a catchall state.
    :_ :start})
 
 
-(def fsm (n/create-fsm states :start))
+(def fsm (n/create-fsm! states :start))
 
 (reduce fsm 0 "xabx")
 ; => 1
@@ -108,7 +108,7 @@ let's say we want to substract 1 when we get a match other than "ab"
                 (dec accumulator))]})
 
 
-(def fsm (n/create-fsm states :start))
+(def fsm (n/create-fsm! states :start))
 
 (reduce fsm 0 "xabx")
 ; => -1
@@ -129,7 +129,7 @@ You can also add catchalls for a particular state which will take precedence ove
    :_ [:start (fn [accumulator]
                 (dec accumulator))]})
 
-(def fsm (n/create-fsm states :start))
+(def fsm (n/create-fsm! states :start))
 
 (reduce fsm 0 "abac")
 ; => 11
@@ -183,7 +183,7 @@ Here's how we can model the state of the students.
 
 ;; We create a stateless fsm
 
-(def next-grade (n/create-stateless-fsm states))
+(def next-grade (n/create-fsm states))
 
 
 
@@ -198,5 +198,49 @@ Here's how we can model the state of the students.
 
 ```
 
-`create-stateless-fsm` returns a function that takes 3 arguments: `current-state`, `accumulator`, `input`.
+`create-fsm` returns a multi-arity function that takes 2 or 3 arguments
+
+```clj 
+2-arity - ([state input])
+3-arity - ([state accumulator input])
+```
+
+The 2-arity function is useful when you want to see how the state changes over a series of inputs.
+
+```clj
+(require '[notamaton.core :as n])
+
+(def states
+  {9 {:pass 10
+      :fail 9}
+   10 {:pass 11
+       :fail 10}
+   11 {:pass 12
+       :fail 11}
+   12 {:pass [:college (fn [_] "Get outta here")]
+       :fail 12}})
+
+; SOME of our students
+
+(def tom
+  {:grade 9
+   :status :pass})
+
+(def jim
+  {:grade 9
+   :status :fail})
+
+(def jess
+  {:grade 12
+   :status :pass})
+
+
+;; We create a stateless fsm
+
+(def fsm (n/create-fsm states))
+
+
+(reduce fsm tom [:pass :pass :pass :pass])
+;=> :college
+```
 
